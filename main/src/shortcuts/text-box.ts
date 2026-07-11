@@ -1,7 +1,8 @@
 import { uIOhook, UiohookKey as Key } from 'uiohook-napi'
-import process from 'process';
+import process from 'process'
 import type { HostClipboard } from './HostClipboard'
 import type { OverlayWindow } from '../windowing/OverlayWindow'
+import { delay } from './utils'
 
 const PLACEHOLDER_LAST = '@last'
 const AUTO_CLEAR = [
@@ -58,8 +59,32 @@ export function stashSearch (
   clipboard.restoreShortly((clipboard) => {
     overlay.assertGameActive()
     clipboard.writeText(text)
-    uIOhook.keyTap(Key.F, [Key.Ctrl])
-    uIOhook.keyTap(Key.V, [process.platform === 'darwin' ? Key.Meta : Key.Ctrl])
-    uIOhook.keyTap(Key.Enter)
+
+    if (process.platform === 'linux') {
+      return (async () => {
+        // XWayland/Wine needs focus and non-zero-duration key transitions
+        await delay(10)
+
+        uIOhook.keyToggle(Key.Ctrl, 'down')
+        try {
+          await delay(10)
+          uIOhook.keyToggle(Key.F, 'down')
+          await delay(10)
+          uIOhook.keyToggle(Key.F, 'up')
+          await delay(10)
+        } finally {
+          uIOhook.keyToggle(Key.Ctrl, 'up')
+        }
+
+        await delay(10)
+        uIOhook.keyTap(Key.V, [Key.Ctrl])
+        await delay(10)
+        uIOhook.keyTap(Key.Enter)
+      })()
+    } else {
+      uIOhook.keyTap(Key.F, [Key.Ctrl])
+      uIOhook.keyTap(Key.V, [process.platform === 'darwin' ? Key.Meta : Key.Ctrl])
+      uIOhook.keyTap(Key.Enter)
+    }
   })
 }
