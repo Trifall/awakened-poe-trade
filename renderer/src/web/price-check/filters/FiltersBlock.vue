@@ -9,16 +9,10 @@
         :filter="filters.mapTier" :name="t('item.map_tier')" />
       <filter-btn-logical v-if="filters.mapCompletionReward" readonly
         :filter="{ disabled: false }" :text="t('item.map_foil_reward', [filters.mapCompletionReward.name])" />
-      <filter-btn-logical v-if="filters.scryingMapArea" readonly
-        :filter="{ disabled: false }" :text="filters.scryingMapArea" />
       <filter-btn-numeric v-if="filters.areaLevel"
         :filter="filters.areaLevel" :name="t('item.area_level')" />
-      <filter-btn-numeric v-if="filters.heistWingsRevealed"
-        :filter="filters.heistWingsRevealed" :name="t('item.heist_wings_revealed')" />
       <filter-btn-numeric v-if="filters.sentinelCharge"
         :filter="filters.sentinelCharge" :name="t('item.sentinel_charge')" />
-      <filter-btn-logical v-if="filters.mapBlighted" readonly
-        :filter="{ disabled: false }" :text="filters.mapBlighted.value" />
       <filter-btn-numeric v-if="filters.itemLevel"
         :filter="filters.itemLevel" :name="t('item.item_level')" />
       <filter-btn-numeric v-if="filters.stackSize"
@@ -66,11 +60,15 @@
         <div class="flex-1 border-b border-gray-700" />
       </div>
       <form @submit.prevent="handleStatsSubmit">
-        <filter-modifier v-for="filter of filteredStats" :key="filter.tag + '/' + filter.text"
-          :filter="filter"
-          :item="item"
-          :show-sources="showFilterSources"
-          @submit="handleStatsSubmit" />
+        <template v-for="filter of filteredStats">
+          <filter-group v-if="filter.group" :key="`group_${filter.meta.tag}_${filter.meta.text}`"
+            :group="filter"
+            :item="item" />
+          <filter-modifier v-else :key="`${filter.tag}_${filter.text}`"
+            :filter="filter"
+            :item="item"
+            :show-sources="showFilterSources" />
+        </template>
         <div v-if="!filteredStats.length && !showUnknownMods"
           class="border-b border-gray-700 py-2">{{ t('filters.empty') }}</div>
         <template v-if="showUnknownMods">
@@ -96,10 +94,11 @@ import { defineComponent, watch, shallowRef, shallowReactive, computed, PropType
 import { useI18n } from 'vue-i18n'
 import UiToggle from '@/web/ui/UiToggle.vue'
 import FilterModifier from './FilterModifier.vue'
+import FilterGroup from './FilterGroup.vue'
 import FilterBtnNumeric from './FilterBtnNumeric.vue'
 import FilterBtnLogical from './FilterBtnLogical.vue'
 import UnknownModifier from './UnknownModifier.vue'
-import { ItemFilters, StatFilter } from './interfaces'
+import { ItemFilters, FilterOrGroup } from './interfaces'
 import { ParsedItem, ItemRarity, ItemCategory } from '@/parser'
 
 export default defineComponent({
@@ -107,6 +106,7 @@ export default defineComponent({
   emits: ['submit', 'preset'],
   components: {
     FilterModifier,
+    FilterGroup,
     FilterBtnNumeric,
     FilterBtnLogical,
     UnknownModifier,
@@ -122,7 +122,7 @@ export default defineComponent({
       required: true
     },
     stats: {
-      type: Array as PropType<StatFilter[]>,
+      type: Array as PropType<FilterOrGroup[]>,
       required: true
     },
     item: {
@@ -154,14 +154,21 @@ export default defineComponent({
       showHidden,
       showFilterSources,
       totalSelectedMods: computed(() => {
-        return props.stats.filter(stat => !stat.disabled).length
+        return props.stats.filter(stat => {
+          if (stat.group) {
+            return !stat.meta.disabled
+          }
+          return !stat.disabled
+        }).length
       }),
       filteredStats: computed(() => {
-        if (showHidden.value) {
-          return props.stats.filter(s => s.hidden)
-        } else {
-          return props.stats.filter(s => !s.hidden)
-        }
+        const show = showHidden.value
+        return props.stats.filter(s => {
+          if (s.group) {
+            return Boolean(s.meta.hidden) === show
+          }
+          return Boolean(s.hidden) === show
+        })
       }),
       searchSub: computed(() => {
         const { filters } = props
